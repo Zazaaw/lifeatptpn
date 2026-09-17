@@ -1,0 +1,513 @@
+/* ==========================================================================
+   p441z Style Kit — globals.css  (Tailwind v4)
+   --------------------------------------------------------------------------
+   Copy to `src/app/globals.css`.
+
+   THIS FILE IS THE ENTIRE CONFIG. There is no tailwind.config.ts in v4 —
+   theme, dark mode, plugins, and keyframes all live here.
+
+   Structure:
+     1. @import + plugins
+     2. @custom-variant  → class-based dark mode
+     3. :root / .dark    → raw HSL token values
+     4. @theme inline    → maps those tokens to Tailwind utility names
+     5. @theme           → motion vocabulary (keyframes + animations)
+     6. @layer base      → global resets
+     7. Custom scrollbar
+
+   TO REBRAND — see §3 below. Change --primary and --ring only.
+   ========================================================================== */
+
+@import "tailwindcss";
+
+/* tw-animate-css is the v4-native replacement for the old
+   `tailwindcss-animate` plugin (which was v3 JS-based).
+   Install:  npm i tw-animate-css                                            */
+@import "tw-animate-css";
+
+/* --------------------------------------------------------------------------
+   1. DARK MODE
+   v4 defaults to prefers-color-scheme. This line switches it to class-based
+   so next-themes (or a manual toggle) can drive it.
+   -------------------------------------------------------------------------- */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* --------------------------------------------------------------------------
+   2. TOKEN VALUES (lifeatptpn-insight, redesign 17 Sep 2026)
+   Triplet HSL telanjang supaya opacity modifier (bg-card/85) tetap jalan.
+   Palet diturunkan dari logo Life at PTPN (#70AE6D hijau, #4CA7DD biru,
+   #FF9100 oranye) dan logo PTPN. Kontras teks dihitung WCAG; angka di komentar.
+   Palet chart kategorikal divalidasi dataviz/validate_palette.js:
+   terang di #ffffff, gelap di #131b15 (urutan tetap: Reels, Carousel, Foto, Story).
+   -------------------------------------------------------------------------- */
+:root {
+  --background: 90 23.5% 93.3%; /* #EEF2EA sage lembut, latar halaman */
+  --foreground: 133 16.4% 10.8%; /* #172019 */
+  --card: 0 0.0% 100.0%; /* #FFFFFF kartu; dipakai bg-card/85 di atas latar gradasi */
+  --card-foreground: 133 16.4% 10.8%; /* #172019 */
+  --popover: 0 0.0% 100.0%; /* #FFFFFF */
+  --popover-foreground: 133 16.4% 10.8%; /* #172019 */
+  --primary: 131 16.9% 12.7%; /* #1B261D pil gelap hijau-hitam (tombol/nav aktif) */
+  --primary-foreground: 90 27.3% 95.7%; /* #F4F7F1 */
+  --secondary: 96 20.8% 90.6%; /* #E6ECE2 */
+  --secondary-foreground: 133 16.4% 10.8%; /* #172019 */
+  --muted: 90 22.2% 92.9%; /* #EDF1E9 */
+  --muted-foreground: 136 8.0% 36.7%; /* #56655A 6,2:1 di kartu, 5,4:1 di latar */
+  --accent: 95 23.1% 89.8%; /* #E4EBDF hover */
+  --accent-foreground: 133 16.4% 10.8%; /* #172019 */
+  --destructive: 4 64.1% 48.0%; /* #C9372C */
+  --destructive-foreground: 0 0.0% 100.0%; /* #FFFFFF */
+  --border: 95 18.2% 87.1%; /* #DDE4D8 */
+  --input: 94 16.3% 83.1%; /* #D3DBCD */
+  --ring: 119 41.0% 30.6%; /* #2F6E2E */
+  --brand-green: 117 28.6% 55.5%; /* #70AE6D hijau logo; teks di atasnya WAJIB gelap (putih cuma 2,6:1) */
+  --brand-green-strong: 119 41.0% 30.6%; /* #2F6E2E hijau untuk teks/link/bg bertulisan putih (6,2:1) */
+  --brand-green-soft: 110 31.0% 88.6%; /* #DCEBD9 */
+  --brand-blue: 202 68.1% 58.2%; /* #4CA7DD biru logo */
+  --brand-blue-soft: 202 69.6% 91.0%; /* #D8ECF8 */
+  --brand-orange: 34 100.0% 50.0%; /* #FF9100 oranye logo; sorotan dengan teks gelap (7,4:1) */
+  --brand-orange-soft: 34 100.0% 89.0%; /* #FFE7C7 */
+  --ink: 131 16.9% 12.7%; /* #1B261D kartu gelap kontras (seperti kartu hitam di referensi) */
+  --ink-foreground: 97 25.0% 93.7%; /* #EEF3EB */
+  --ink-muted: 133 8.9% 69.0%; /* #A9B7AC 7,5:1 di ink */
+  --chart-1: 119 41.0% 30.6%; /* #2F6E2E Reels */
+  --chart-2: 206 61.3% 52.4%; /* #3B8FD0 Carousel */
+  --chart-3: 35 91.6% 53.3%; /* #F59A1B Foto (<3:1: wajib label/tabel) */
+  --chart-4: 282 31.8% 42.5%; /* #7A4A8F Story */
+  --chart-5: 132 6.6% 44.9%; /* #6B7A6E Video feed */
+  --heat-1: 115 28.9% 91.2%; /* #E3EFE2 */
+  --heat-2: 116 29.4% 80.0%; /* #BFDBBD */
+  --heat-3: 116 28.7% 65.9%; /* #92C18F */
+  --heat-4: 117 25.5% 50.0%; /* #62A05F */
+  --heat-5: 117 35.8% 36.7%; /* #3F7F3C */
+  --heat-6: 119 42.1% 23.7%; /* #245623 */
+  --delta-up: 119 41.0% 30.6%; /* #2F6E2E */
+  --delta-down: 4 76.5% 40.0%; /* #B42318 */
+
+  /* Radius dasar komponen kit (tombol/input memakai rounded-full di desain ini). */
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 140 17.6% 6.7%; /* #0E1410 */
+  --foreground: 100 23.1% 92.4%; /* #EAF0E7 */
+  --card: 135 15.4% 10.2%; /* #161E18 */
+  --card-foreground: 100 23.1% 92.4%; /* #EAF0E7 */
+  --popover: 127 15.8% 11.2%; /* #182119 */
+  --popover-foreground: 100 23.1% 92.4%; /* #EAF0E7 */
+  --primary: 100 23.1% 92.4%; /* #EAF0E7 pil terang di latar gelap */
+  --primary-foreground: 130 23.1% 10.2%; /* #142016 */
+  --secondary: 131 15.1% 14.3%; /* #1F2A21 */
+  --secondary-foreground: 100 23.1% 92.4%; /* #EAF0E7 */
+  --muted: 132 15.2% 12.9%; /* #1C261E */
+  --muted-foreground: 133 8.1% 66.3%; /* #A2B0A5 7,5:1 di kartu */
+  --accent: 134 15.7% 16.3%; /* #233026 */
+  --accent-foreground: 100 23.1% 92.4%; /* #EAF0E7 */
+  --destructive: 5 74.8% 59.6%; /* #E5574B */
+  --destructive-foreground: 140 17.6% 6.7%; /* #0E1410 */
+  --border: 140 13.6% 17.3%; /* #26322A */
+  --input: 134 12.4% 20.6%; /* #2E3B31 */
+  --ring: 117 28.6% 55.5%; /* #70AE6D */
+  --brand-green: 117 28.6% 55.5%; /* #70AE6D */
+  --brand-green-strong: 117 32.9% 66.1%; /* #8FC58C 8,5:1 di kartu */
+  --brand-green-soft: 126 25.9% 15.9%; /* #1E3320 */
+  --brand-blue: 202 73.5% 62.9%; /* #5BB2E6 */
+  --brand-blue-soft: 202 48.2% 16.7%; /* #16303F */
+  --brand-orange: 32 100.0% 58.6%; /* #FF9E2C */
+  --brand-orange-soft: 36 52.6% 14.9%; /* #3A2A12 */
+  --ink: 137 21.4% 16.5%; /* #213326 tetap lebih menonjol dari kartu biasa */
+  --ink-foreground: 97 25.0% 93.7%; /* #EEF3EB */
+  --ink-muted: 133 8.9% 69.0%; /* #A9B7AC 6,4:1 */
+  --chart-1: 117 29.4% 46.7%; /* #579A54 */
+  --chart-2: 204 60.3% 53.5%; /* #4196D0 */
+  --chart-3: 34 100.0% 40.6%; /* #CF7400 */
+  --chart-4: 281 35.0% 51.8%; /* #9459AF (teks putih 4,9:1; lolos validator) */
+  --chart-5: 133 6.4% 56.9%; /* #8A988D */
+  --heat-1: 124 36.5% 16.7%; /* #1B3A1D */
+  --heat-2: 121 42.9% 24.7%; /* #245A25 */
+  --heat-3: 118 42.0% 34.5%; /* #357D33 */
+  --heat-4: 118 34.5% 45.5%; /* #4F9C4C */
+  --heat-5: 117 33.7% 59.2%; /* #78BA74 */
+  --heat-6: 115 37.9% 74.1%; /* #A8D6A4 */
+  --delta-up: 117 32.9% 66.1%; /* #8FC58C */
+  --delta-down: 5 81.2% 72.9%; /* #F28B82 */
+}
+
+/* --------------------------------------------------------------------------
+   3. THEME MAPPING
+   `@theme inline` resolves var() at build time rather than emitting another
+   layer of indirection — required here because our tokens are defined in
+   :root/.dark rather than inside @theme itself. Without `inline`, dark-mode
+   overrides would not resolve correctly.
+
+   This block is what turns --background into `bg-background`, --primary into
+   `bg-primary` / `text-primary` / `border-primary`, and so on.
+   -------------------------------------------------------------------------- */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --color-heat-1: hsl(var(--heat-1));
+  --color-heat-2: hsl(var(--heat-2));
+  --color-heat-3: hsl(var(--heat-3));
+  --color-heat-4: hsl(var(--heat-4));
+  --color-heat-5: hsl(var(--heat-5));
+  --color-heat-6: hsl(var(--heat-6));
+
+  --color-delta-up: hsl(var(--delta-up));
+  --color-delta-down: hsl(var(--delta-down));
+
+  --color-brand-green: hsl(var(--brand-green));
+  --color-brand-green-strong: hsl(var(--brand-green-strong));
+  --color-brand-green-soft: hsl(var(--brand-green-soft));
+  --color-brand-blue: hsl(var(--brand-blue));
+  --color-brand-blue-soft: hsl(var(--brand-blue-soft));
+  --color-brand-orange: hsl(var(--brand-orange));
+  --color-brand-orange-soft: hsl(var(--brand-orange-soft));
+  --color-ink: hsl(var(--ink));
+  --color-ink-foreground: hsl(var(--ink-foreground));
+  --color-ink-muted: hsl(var(--ink-muted));
+
+  /* Shape lock (skill-ui-ux §4.4): kartu 28px, tile di dalam kartu 20px,
+     kontrol interaktif (tombol, pil, input) penuh membulat. */
+  --radius-card: 1.75rem;
+  --radius-tile: 1.25rem;
+
+  /* Font dari next/font (layout.tsx) */
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* All three derive from --radius, so one edit rescales everything. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+/* --------------------------------------------------------------------------
+   3b. TYPE SCALE (skill-typography, disesuaikan untuk dashboard)
+   Base 16px, rasio φ = 1.618, half-step √φ = 1.272, plus body-sm (¼ step).
+   Produk "scanning": tidak ada token di atas φ² (41.89px) selain KPI.
+   Spec sheet lengkap: docs/typography-spec.md.
+   JANGAN pakai text-xs … text-6xl bawaan Tailwind di project ini.
+   -------------------------------------------------------------------------- */
+@theme {
+  --text-caption: 0.786rem;  /* 12.58px  caption, helper, header tabel, label KPI */
+  --text-caption--line-height: 1.4;
+  --text-body-sm: 0.887rem;  /* 14.19px  sel tabel, label form, tombol, nav */
+  --text-body-sm--line-height: 1.5;
+  --text-body: 1rem;         /* 16.00px  paragraf */
+  --text-body--line-height: 1.618;
+  --text-lead: 1.272rem;     /* 20.35px  judul seksi */
+  --text-lead--line-height: 1.35;
+  --text-h5: 1.618rem;       /* 25.89px  judul halaman */
+  --text-h5--line-height: 1.25;
+  --text-h5--letter-spacing: -0.01em;
+  --text-h4: 2.058rem;       /* 32.93px  KPI di layar kecil */
+  --text-h4--line-height: 1.1;
+  --text-h4--letter-spacing: -0.015em;
+  --text-kpi: 2.618rem;      /* 41.89px  angka KPI utama */
+  --text-kpi--line-height: 1;
+  --text-kpi--letter-spacing: -0.02em;
+  --text-display: 3.330rem;  /* 53.28px  angka sorotan di kepala halaman (φ^2.5), bobot 400 */
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.025em;
+
+  --spacing-rhythm: 1.618rem; /* 25.89px  jarak antar blok teks */
+}
+
+/* Bayangan lembut berwarna latar (skill-ui-ux §4.4: bukan hitam murni).
+   Satu nama supaya kartu baru tidak menyalin string bayangan panjang. */
+@utility shadow-card {
+  box-shadow: 0 24px 48px -36px hsl(var(--foreground) / 0.35);
+}
+@utility shadow-ink {
+  box-shadow: 0 28px 56px -30px hsl(var(--foreground) / 0.6);
+}
+
+/* Kepala halaman: kartu terang dengan sapuan warna logo di sisi kanan (tempat angka sorotan),
+   supaya judul dan angka terbaca sebagai satu blok, bukan dua elemen yang mengambang. */
+@utility hero-wash {
+  background:
+    radial-gradient(42rem 20rem at 100% 0%, hsl(var(--brand-green-soft) / 0.9) 0%, transparent 65%),
+    radial-gradient(30rem 16rem at 72% 120%, hsl(var(--brand-orange-soft) / 0.75) 0%, transparent 60%),
+    hsl(var(--card) / 0.8);
+}
+
+/* Sorotan cahaya lembut di kartu gelap (panggung Spin Wheel, sampul laporan,
+   kartu slot terbaik). Gradasi dari palet logo, bukan ungu/neon. */
+@utility ink-glow {
+  background:
+    radial-gradient(38rem 22rem at 100% 0%, hsl(var(--brand-green) / 0.28) 0%, transparent 62%),
+    radial-gradient(30rem 20rem at 0% 110%, hsl(var(--brand-orange) / 0.2) 0%, transparent 60%),
+    hsl(var(--ink));
+}
+
+/* --------------------------------------------------------------------------
+   4. MOTION VOCABULARY
+   In v4, keyframes live inside @theme next to their --animate-* variable.
+   Each entry generates one utility class, e.g. `animate-shimmer`.
+
+   Animations referencing a CSS variable (--duration, --speed, --radius,
+   --gap, --shimmer-width) are configured per-instance via inline style:
+
+     <div className="animate-marquee" style={{ "--duration": "20s", "--gap": "1rem" }} />
+
+   That keeps one keyframe reusable at many speeds.
+   -------------------------------------------------------------------------- */
+@theme {
+  --animate-shimmer: shimmer 8s infinite;
+  --animate-marquee: marquee var(--duration, 20s) linear infinite;
+  --animate-marquee-vertical: marquee-vertical var(--duration, 20s) linear infinite;
+  --animate-spin-around: spin-around calc(var(--speed, 2s) * 2) infinite linear;
+  --animate-slide: slide var(--speed, 4s) ease-in-out infinite alternate;
+  --animate-gradient-x: gradient-x 4s ease infinite;
+  --animate-spin-slow: spin 4s linear infinite;
+  --animate-shine: shine 3s linear infinite;
+  --animate-ripple: ripple 0.6s ease-out;
+  --animate-rainbow: rainbow 3s linear infinite;
+  --animate-border-beam: border-beam var(--duration, 4s) linear infinite;
+  --animate-meteor: meteor 5s linear infinite;
+  --animate-orbit: orbit var(--duration, 20s) linear infinite;
+
+  /* Animated gradient text/background — slides the gradient, not the box. */
+  @keyframes gradient-x {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+
+  /* A light sweep across text or buttons. */
+  @keyframes shine {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  /* Material-style click ripple. */
+  @keyframes ripple {
+    to { transform: translate(-50%, -50%) scale(28); opacity: 0; }
+  }
+
+  @keyframes rainbow {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+
+  /* Traces a light along an element's border via offset-path. */
+  @keyframes border-beam {
+    100% { offset-distance: 100%; }
+  }
+
+  @keyframes meteor {
+    0%   { transform: rotate(215deg) translateX(0); opacity: 1; }
+    70%  { opacity: 1; }
+    100% { transform: rotate(215deg) translateX(-500px); opacity: 0; }
+  }
+
+  @keyframes grid-scroll {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(40px); }
+  }
+
+  /* Circular orbit — the counter-rotation keeps the child upright. */
+  @keyframes orbit {
+    0% {
+      transform: rotate(0deg) translateY(calc(var(--radius, 80px) * 1px)) rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg) translateY(calc(var(--radius, 80px) * 1px)) rotate(-360deg);
+    }
+  }
+
+  /* Long pause, quick sweep — a periodic glint, not a constant shimmer. */
+  @keyframes shimmer {
+    0%, 90%, 100% {
+      background-position: calc(-100% - var(--shimmer-width, 100px)) 0;
+    }
+    30%, 60% {
+      background-position: calc(100% + var(--shimmer-width, 100px)) 0;
+    }
+  }
+
+  /* Infinite scroller. Duplicate your content twice for a seamless loop. */
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(calc(-100% - var(--gap, 1rem))); }
+  }
+
+  @keyframes marquee-vertical {
+    from { transform: translateY(0); }
+    to   { transform: translateY(calc(-100% - var(--gap, 1rem))); }
+  }
+
+  @keyframes spin-around {
+    0%        { transform: translateZ(0) rotate(0); }
+    15%, 35%  { transform: translateZ(0) rotate(90deg); }
+    65%, 85%  { transform: translateZ(0) rotate(270deg); }
+    100%      { transform: translateZ(0) rotate(360deg); }
+  }
+
+  @keyframes slide {
+    to { transform: translate(calc(100cqw - 100%), 0); }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5. BASE LAYER
+   -------------------------------------------------------------------------- */
+@layer base {
+  /* v4 removed the default border color, so an unqualified `border` class
+     renders currentColor. This restores the v3 behaviour: every element
+     defaults to the theme border, letting you write `border` / `border-b`
+     anywhere without also picking a color. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  /* Latar gradasi lembut (arah referensi desain): hijau logo di kiri atas,
+     oranye logo di kanan bawah. Lapisan fixed terpisah, bukan
+     background-attachment: fixed, supaya scroll di ponsel tetap ringan. */
+  .app-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(70rem 42rem at -10% -10%, hsl(var(--brand-green-soft)) 0%, transparent 60%),
+      radial-gradient(56rem 38rem at 110% 105%, hsl(var(--brand-orange-soft)) 0%, transparent 58%),
+      radial-gradient(40rem 30rem at 85% 0%, hsl(var(--brand-blue-soft) / 0.7) 0%, transparent 60%),
+      hsl(var(--background));
+  }
+
+  /* Bobot yang tidak di-load tampil sebagai 400, bukan bold palsu. */
+  html {
+    font-synthesis: none;
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+
+  /* prefers-contrast: teks muted digelapkan satu tingkat. */
+  @media (prefers-contrast: more) {
+    :root { --muted-foreground: 0 0% 25%; }
+    .dark { --muted-foreground: 0 0% 80%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5b. PRINT (halaman Laporan)
+   -------------------------------------------------------------------------- */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  :root, .dark {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --muted-foreground: 0 0% 35%;
+    --border: 0 0% 85%;
+  }
+  .no-print { display: none !important; }
+  .app-backdrop { display: none; }
+  .print-break-avoid { break-inside: avoid; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* --------------------------------------------------------------------------
+   6. CUSTOM SCROLLBAR
+   A soft pill floating in a channel, matching the rounded UI.
+   -------------------------------------------------------------------------- */
+:root {
+  --sb-size: 12px;
+  --sb-thumb: 0 0% 60%;
+  --sb-thumb-hover: 0 0% 45%;
+}
+.dark {
+  /* Lighter in dark mode so the thumb stays visible on a near-black page. */
+  --sb-thumb: 0 0% 40%;
+  --sb-thumb-hover: 0 0% 55%;
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: var(--sb-size);
+  height: var(--sb-size);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--sb-thumb) / 0.45);
+  border-radius: 9999px;
+  /* The trick: a transparent border + background-clip: content-box fakes
+     padding around the pill, so it floats instead of touching the edges. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--sb-thumb-hover) / 0.7);
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: hsl(var(--sb-thumb-hover) / 0.85);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--sb-thumb) / 0.5) transparent;
+}
