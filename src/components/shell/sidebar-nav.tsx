@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  CalendarCheckIcon,
   ClockIcon,
   ConfettiIcon,
   FileTextIcon,
@@ -18,6 +19,7 @@ import { NAV_ITEMS, RANGE_AWARE, type NavIcon } from "./nav-items";
 const ICONS: Record<NavIcon, Icon> = {
   overview: SquaresFourIcon,
   content: ImagesSquareIcon,
+  plan: CalendarCheckIcon,
   time: ClockIcon,
   audience: UsersThreeIcon,
   wheel: ConfettiIcon,

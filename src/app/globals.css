@@ -84,6 +84,19 @@
   --delta-up: 119 41.0% 30.6%; /* #2F6E2E */
   --delta-down: 4 76.5% 40.0%; /* #B42318 */
 
+  /* Jenis acara di kalender Rencana. 8 warna kategorikal, divalidasi
+     dataviz/validate_palette.js (mode terang, permukaan kartu): lightness band,
+     chroma, pemisahan CVD, dan kontras semuanya lolos. Warna teks di atasnya
+     ada di PLAN_ON_FILL (src/lib/plan.ts), semua >= 4,5:1. */
+  --plan-shooting: 285 36.5% 45.7%; /* #8A4A9F */
+  --plan-posting: 119 41.0% 30.6%;  /* #2F6E2E */
+  --plan-event: 206 61.3% 52.4%;    /* #3B8FD0 */
+  --plan-deadline: 4 64.1% 48.0%;   /* #C9372C */
+  --plan-riset: 187 63.6% 47.5%;    /* #2CB3C6 */
+  --plan-editing: 37 100.0% 43.9%;  /* #E08A00 */
+  --plan-meeting: 229 38.8% 47.5%;  /* #4A5BA8 */
+  --plan-libur: 333 51.4% 49.2%;    /* #BE3D77 */
+
   /* Radius dasar komponen kit (tombol/input memakai rounded-full di desain ini). */
   --radius: 0.75rem;
 }
@@ -131,6 +144,16 @@
   --heat-6: 115 37.9% 74.1%; /* #A8D6A4 */
   --delta-up: 117 32.9% 66.1%; /* #8FC58C */
   --delta-down: 5 81.2% 72.9%; /* #F28B82 */
+
+  /* Jenis acara, langkah tersendiri untuk mode gelap (bukan pembalikan). */
+  --plan-shooting: 283 35.9% 59.6%; /* #A873BD */
+  --plan-posting: 117 29.4% 46.7%;  /* #579A54 */
+  --plan-event: 204 60.3% 53.5%;    /* #4196D0 */
+  --plan-deadline: 5 72.4% 61.6%;   /* #E46356 */
+  --plan-riset: 188 64.2% 42.7%;    /* #27A0B3 */
+  --plan-editing: 38 69.6% 43.9%;   /* #BE8422 */
+  --plan-meeting: 231 51.1% 63.9%;  /* #7482D2 */
+  --plan-libur: 333 52.0% 60.0%;    /* #CE6493 */
 }
 
 /* --------------------------------------------------------------------------
@@ -187,6 +210,15 @@
 
   --color-delta-up: hsl(var(--delta-up));
   --color-delta-down: hsl(var(--delta-down));
+
+  --color-plan-shooting: hsl(var(--plan-shooting));
+  --color-plan-posting: hsl(var(--plan-posting));
+  --color-plan-event: hsl(var(--plan-event));
+  --color-plan-deadline: hsl(var(--plan-deadline));
+  --color-plan-riset: hsl(var(--plan-riset));
+  --color-plan-editing: hsl(var(--plan-editing));
+  --color-plan-meeting: hsl(var(--plan-meeting));
+  --color-plan-libur: hsl(var(--plan-libur));
 
   --color-brand-green: hsl(var(--brand-green));
   --color-brand-green-strong: hsl(var(--brand-green-strong));
