@@ -16,6 +16,7 @@ Data ditarik otomatis dari Instagram Graph API ke Supabase setiap jam. Dashboard
 | `/audiens` | Umur & gender, kota, negara, jam online |
 | `/konten/[id]#komentar` | Komentar per akun untuk satu post (cari, akun paling aktif, balasan) |
 | `/spin-wheel` | Spin Wheel kuis: peserta dari komentar post (filter kata kunci, batas waktu, kecualikan akun) atau input manual |
+| `/rencana` | Kalender rencana konten: klik tanggal untuk melihat rincian acara, tambah/ubah/hapus dengan PIN |
 | `/laporan` | Laporan siap kirim + tombol Unduh Excel dan Cetak |
 | `/api/laporan/excel?from=YYYY-MM-DD&to=YYYY-MM-DD` | File .xlsx |
 
@@ -41,6 +42,7 @@ region fungsi `sin1` Singapura supaya dekat dengan Supabase `ap-southeast-1`).
    |---|---|
    | `SUPABASE_URL` | URL project Supabase (`https://<ref>.supabase.co`) |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (Supabase > Project Settings > API). **Rahasia**, jangan diberi prefix `NEXT_PUBLIC_` |
+   | `PLAN_EDIT_PIN` | PIN untuk mengubah jadwal di menu Rencana (minimal 4 karakter). Tanpa ini kalender tetap terbaca, tetapi tidak bisa diubah dari web |
 
 3. Deploy. Setiap push ke branch utama men-deploy ulang otomatis.
 
@@ -71,6 +73,26 @@ supaya hidup ulang otomatis. Dashboard **tanpa login**: bila URL tidak boleh dik
 level proxy (IP allowlist atau basic auth). Halaman sudah diberi `noindex`.
 
 `SUPABASE_SERVICE_ROLE_KEY` hanya dibaca di server (`src/lib/supabase-server.ts` bertanda `server-only`).
+
+## Menu Rencana (kalender konten)
+
+Menu ini satu-satunya bagian yang **menulis** data dari web, jadi ada dua hal yang perlu disiapkan.
+
+1. Jalankan `supabase/migrations/20260918090000_ig_plan.sql` di SQL editor Supabase. Migrasi membuat
+   tabel `ig.plan_events`, function `public.ig_plan_*`, dan lima acara contoh berlabel "Contoh" di
+   minggu berjalan (bisa dihapus sekali klik dari halaman Rencana).
+2. Isi `PLAN_EDIT_PIN` di environment (lokal dan Vercel).
+
+Cara kerjanya: membaca kalender bebas tanpa PIN; menambah, mengubah, dan menghapus perlu PIN yang
+dimasukkan sekali dan berlaku 12 jam di browser itu. Cookie hanya menyimpan sidik sha256 dari PIN,
+bertanda httpOnly, dan setiap server action memeriksa ulang sebelum menulis. PIN salah lima kali
+berturut-turut dari satu alamat IP ditahan 10 menit.
+
+Jenis acara: Shooting, Posting, Event, Deadline, Riset, Editing, Meeting, Libur. Tiap acara punya
+judul, jenis, status (rencana/selesai/batal), tanggal dan jam WIB, tanggal selesai opsional, lokasi,
+penanggung jawab, dan deskripsi sampai 2.000 karakter. Kalender juga menandai postingan yang
+benar-benar terbit pada tanggal itu, sehingga rencana dan realisasi terbaca berdampingan. Lima acara
+terdekat muncul di halaman Ringkasan.
 
 ## Sinkronisasi data (Supabase)
 
