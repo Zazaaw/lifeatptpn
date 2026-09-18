@@ -14,8 +14,12 @@ import { ErCard } from "@/components/overview/er-card";
 import { TopPostsCard } from "@/components/overview/top-posts-card";
 import { PostCalendarCard } from "@/components/overview/post-calendar";
 import { PeriodDetails } from "@/components/overview/period-details";
+import { UpcomingPlanCard } from "@/components/overview/upcoming-plan-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMeta, getOverview, getPostCalendar } from "@/lib/data";
+import { getPlanUpcoming } from "@/lib/plan";
+import { DataError } from "@/lib/supabase-server";
+import type { PlanUpcoming } from "@/lib/plan-types";
 import { fmtCompact, fmtInt, fmtPct, fmtRange } from "@/lib/format";
 import { parseRange, rangeQuery } from "@/lib/range";
 
@@ -40,10 +44,21 @@ export default async function OverviewPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const range = parseRange(await searchParams);
-  const [o, meta, calendar] = await Promise.all([
+  const [o, meta, calendar, plan] = await Promise.all([
     getOverview(range.from, range.to),
     getMeta(),
     getPostCalendar(range.to),
+    // Menu Rencana bisa saja belum dimigrasikan di database: kartunya menjelaskan
+    // sebabnya, sementara sisa halaman tetap tampil.
+    getPlanUpcoming(5)
+      .then((d) => ({ data: d as PlanUpcoming | null, error: undefined as string | undefined }))
+      .catch((e) => ({
+        data: null,
+        error:
+          e instanceof DataError && /ig_plan_upcoming|schema cache|does not exist|PGRST202/i.test(e.detail ?? "")
+            ? "Menu Rencana belum aktif: jalankan migrasi supabase/migrations/20260918090000_ig_plan.sql di Supabase."
+            : "Rencana terdekat gagal dimuat. Coba muat ulang halaman.",
+      })),
   ]);
   const c = o.current;
   const p = o.previous;
@@ -145,6 +160,8 @@ export default async function OverviewPage({
             <TopPostsCard posts={o.top_posts} totalPosts={o.posts_current.posts ?? 0} query={query} />
           </div>
         </section>
+
+        <UpcomingPlanCard data={plan.data} error={plan.error} />
 
         {/* Angka utama + perbandingan */}
         <section aria-label="Angka utama" className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4">
