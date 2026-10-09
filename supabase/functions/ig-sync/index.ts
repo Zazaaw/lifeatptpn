@@ -23,6 +23,9 @@ const ACCOUNT_GAP_PER_RUN = 6; // 2 request per hari → maks 12 request per run
 const TOKEN_REFRESH_AFTER_DAYS = 7;
 const COMMENT_REQUEST_BUDGET = 30; // maks request komentar per run jam-an
 const COMMENT_RECHECK_HOURS = 24; // post < 7 hari dicek ulang walau jumlah komentar sama
+const IMAGE_BUCKET = "ig-thumbs";
+const IMAGE_BUDGET = 25;      // unduh+unggah maks per run; 250 post terisi dalam ~10 jam
+const IMAGE_RETRY_HOURS = 6;  // post yang gagal dicermin dicoba lagi paling cepat 6 jam
 
 const MEDIA_METRICS = [
   "views", "reach", "likes", "comments", "saved", "shares", "total_interactions",
@@ -265,6 +268,18 @@ async function syncMedia(api: Api, accountId: string, now: Date) {
       last_synced_at = excluded.last_synced_at,
       comments_count = coalesce(excluded.comments_count, ig.media.comments_count),
       like_count = coalesce(excluded.like_count, ig.media.like_count),
+      -- URL CDN baru = kesempatan baru mencermin foto: hapus jejak percobaan
+      -- gagal supaya post langsung masuk kandidat run ini, tidak menunggu
+      -- jeda IMAGE_RETRY_HOURS. Post yang sudah tercermin tidak terpengaruh
+      -- (kandidat hanya yang image_url masih null).
+      image_attempted_at = case
+        when excluded.thumbnail_url is distinct from ig.media.thumbnail_url
+          or excluded.media_url is distinct from ig.media.media_url
+        then null else ig.media.image_attempted_at end,
+      image_error = case
+        when excluded.thumbnail_url is distinct from ig.media.thumbnail_url
+          or excluded.media_url is distinct from ig.media.media_url
+        then null else ig.media.image_error end,
       updated_at = now()`;
 
   const ids = mediaRows.map((r) => r.id);
@@ -299,6 +314,104 @@ async function syncMedia(api: Api, accountId: string, now: Date) {
     }
   }
   return { media: items.length, stories: stories.length, snapshots: snapshots.length, withoutInsights, storyError };
+}
+
+/**
+ * Cermin thumbnail post ke Supabase Storage (bucket `ig-thumbs`).
+ *
+ * URL CDN Meta bertanda tangan dan mati dalam hitungan hari. Selama ini
+ * dashboard memakai URL itu langsung, jadi saat sync berhenti 19 Sep 2026
+ * (Instagram API memblokir akses) seluruh foto hilang walau barisnya ada di
+ * database. Setelah file gambarnya kita simpan sendiri, foto tetap tampil
+ * meski API Instagram mati atau token dicabut.
+ *
+ * Langkah ini SENGAJA tidak memakai Instagram API dan dijalankan di luar
+ * blok `if (accountId)`: justru saat API mulai memblokir, URL CDN yang sudah
+ * tersimpan biasanya masih hidup beberapa hari, dan itu kesempatan terakhir
+ * menyelamatkan gambarnya.
+ *
+ * Dibatasi IMAGE_BUDGET per run supaya satu run tidak kehabisan waktu;
+ * 250 post terisi penuh dalam ~10 jam, post baru tercermin di jam yang sama.
+ */
+async function syncImages(now: Date) {
+  const base = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!base || !key) throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY tidak tersedia");
+
+  const candidates = await sql`
+    select id, coalesce(thumbnail_url, media_url) as src
+    from ig.media
+    where image_url is null
+      and coalesce(thumbnail_url, media_url) is not null
+      and (image_attempted_at is null or image_attempted_at < ${now}::timestamptz - make_interval(hours => ${IMAGE_RETRY_HOURS}::int))
+    order by posted_at desc
+    limit ${IMAGE_BUDGET}`;
+
+  let saved = 0;
+  const errors: Record<string, string> = {};
+
+  for (const row of candidates) {
+    const id = row.id as string;
+    try {
+      const res = await fetch(row.src as string, {
+        signal: AbortSignal.timeout(20_000),
+        headers: { "user-agent": "lifeatptpn-insight/1.0" },
+      });
+      // 403 "URL signature expired" = URL CDN sudah mati sebelum tercermin.
+      // Gambarnya tidak bisa diselamatkan lagi sampai sync mengambil URL baru.
+      if (!res.ok) throw new Error(`CDN ${res.status}`);
+      const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+      if (!type.startsWith("image/")) throw new Error(`bukan gambar: ${type || "tanpa content-type"}`);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.byteLength === 0) throw new Error("file kosong");
+
+      const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+      const path = `${id}.${ext}`;
+      const target = `${base}/storage/v1/object/${IMAGE_BUCKET}/${path}`;
+      // Project ini punya kunci API format baru (sb_secret_...). Storage mengurai
+      // header Authorization sebagai JWT, jadi kunci format baru harus lewat
+      // header `apikey`; kunci legacy (JWT) menerima keduanya. Kalau tetap
+      // ditolak, ulangi tanpa Authorization supaya gateway yang menyuntikkan JWT.
+      const common: Record<string, string> = {
+        apikey: key,
+        "content-type": type,
+        "cache-control": "max-age=31536000, immutable", // isi file tidak pernah berubah
+        "x-upsert": "true",
+      };
+      const put = (headers: Record<string, string>) =>
+        fetch(target, { method: "POST", headers, body: bytes, signal: AbortSignal.timeout(30_000) });
+      let upload = await put({ ...common, authorization: `Bearer ${key}` });
+      if (!upload.ok && [400, 401, 403].includes(upload.status)) upload = await put(common);
+      if (!upload.ok) throw new Error(`Storage ${upload.status}: ${(await upload.text()).slice(0, 120)}`);
+
+      await sql`
+        update ig.media set
+          image_url = ${`${base}/storage/v1/object/public/${IMAGE_BUCKET}/${path}`},
+          image_synced_at = ${now}, image_attempted_at = ${now}, image_error = null, updated_at = now()
+        where id = ${id}`;
+      saved++;
+    } catch (e) {
+      errors[id] = errMsg(e);
+      // Catat percobaan supaya post yang URL-nya sudah mati tidak dicoba tiap jam.
+      await sql`
+        update ig.media set image_attempted_at = ${now}, image_error = ${errMsg(e)}
+        where id = ${id}`;
+    }
+  }
+
+  const [counts] = await sql`
+    select
+      count(*) filter (where image_url is not null)::int as tersimpan,
+      count(*) filter (where image_url is null)::int as belum
+    from ig.media`;
+
+  return {
+    candidates: candidates.length,
+    saved,
+    stored: counts.tersimpan,
+    pending: counts.belum,
+    errors: Object.keys(errors).length ? errors : undefined,
+  };
 }
 
 /**
@@ -706,6 +819,11 @@ Deno.serve(async (req) => {
       await step("token", () => maybeRefreshToken(api, tokenRow.id as string, new Date(tokenRow.updated_at as string), now));
     }
   }
+
+  // Di luar blok accountId: cermin foto tidak butuh Instagram API, dan justru
+  // saat API memblokir akses inilah kesempatan terakhir menyimpan gambar,
+  // selama URL CDN yang sudah tersimpan belum kedaluwarsa.
+  await step("images", () => syncImages(now));
 
   const status = !accountId ? "error" : failures.length ? "partial" : "success";
   details.usage = api.lastUsage;
