@@ -6,9 +6,11 @@ import { ImageBrokenIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 /**
- * Thumbnail post dari CDN Instagram. URL CDN Meta kedaluwarsa beberapa hari
- * dan baru diperbarui saat sync berikutnya, jadi gambar gagal dimuat itu
- * wajar: tampilkan placeholder yang jelas, bukan ikon gambar rusak bawaan browser.
+ * Thumbnail post. Sumbernya didahulukan dari salinan permanen di Supabase
+ * Storage (bucket ig-thumbs, diisi langkah `images` di ig-sync); URL CDN Meta
+ * hanya cadangan untuk post yang belum selesai dicermin, dan URL itu memang
+ * kedaluwarsa beberapa hari. Jadi gambar gagal dimuat masih mungkin terjadi:
+ * tampilkan placeholder yang jelas, bukan ikon gambar rusak bawaan browser.
  */
 export function PostThumb({ src, alt, className }: { src: string | null; alt: string; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -24,8 +26,9 @@ export function PostThumb({ src, alt, className }: { src: string | null; alt: st
     );
   }
   return (
-    // next/image tidak dipakai: URL CDN Meta bertanda tangan & berumur pendek,
-    // optimisasi server hanya akan meng-cache gambar yang sebentar lagi mati.
+    // next/image tidak dipakai: sumbernya bisa salinan Storage atau URL CDN Meta
+    // yang berumur pendek, jadi optimisasi server berisiko meng-cache gambar
+    // yang sebentar lagi mati. Ukuran thumbnail sudah kecil dari sumbernya.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
