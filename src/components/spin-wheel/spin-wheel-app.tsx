@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostThumb } from "@/components/post-thumb";
 import { Wheel } from "./wheel";
-import { buildSegments, finalRotation, landingAngle, parseManualNames, pickWinner, randomInt, type WheelEntry } from "@/lib/wheel";
+import { buildSegments, finalRotation, landingAngle, parseManualNames, pickWinners, randomInt, type WheelEntry } from "@/lib/wheel";
 import { fmtDate, fmtDateTime, fmtInt } from "@/lib/format";
 import { KIND_LABEL } from "@/lib/kinds";
 import { cn } from "@/lib/utils";
@@ -119,12 +119,18 @@ export function SpinWheelApp({
   });
   const [removeWinner, setRemoveWinner] = useState(true);
   const [spinning, setSpinning] = useState(false);
-  const [winner, setWinner] = useState<WheelEntry | null>(null);
+  // Jumlah pemenang per putaran. Pilihan cepat 1/3/5/10, atau diisi bebas.
+  // Disimpan sebagai teks supaya kotak isian boleh kosong sementara saat diketik.
+  const [countInput, setCountInput] = useState("1");
+  const [drawn, setDrawn] = useState<WheelEntry[] | null>(null); // hasil undian yang menunggu disimpan
+  const [partial, setPartial] = useState<WheelEntry[]>([]); // pemenang yang sudah keluar di putaran berjalan
   const [winners, setWinners] = useState<Winner[]>([]);
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
   const rotation = useMotionValue(0);
   const abortRef = useRef<AbortController | null>(null);
+  const skipRef = useRef(false); // "Lewati animasi" ditekan di tengah undian banyak pemenang
+  const animRef = useRef<{ complete?: () => void } | null>(null);
 
   // Riwayat dibaca setelah mount: localStorage tidak ada di server, membaca saat
   // render awal akan membuat HTML server dan client berbeda (hydration mismatch).
@@ -191,42 +197,92 @@ export function SpinWheelApp({
     }
   }, [postId, keyword, until, exclude, includeReplies]);
 
-  function spin() {
+  const drawCount = Math.max(Math.trunc(Number(countInput)) || 1, 1);
+  /** Jumlah pemenang yang benar-benar bisa diundi: tidak melebihi peserta di roda. */
+  const drawTarget = Math.min(drawCount, Math.max(active.length, 1));
+
+  /** Satu putaran roda sampai berhenti. Promise selesai saat animasi berakhir. */
+  const spinOnce = useCallback(
+    (targetAngle: number, turns: number, duration: number) =>
+      new Promise<void>((resolve) => {
+        const target = finalRotation(rotation.get(), targetAngle, turns);
+        const controls = animate(rotation, target, {
+          duration,
+          ease: [0.12, 0.8, 0.12, 1],
+          onComplete: () => {
+            rotation.set(target % 360); // jaga angka rotasi tetap kecil antar putaran
+            animRef.current = null;
+            resolve();
+          },
+        });
+        animRef.current = controls;
+      }),
+    [rotation]
+  );
+
+  /**
+   * Undi `drawTarget` pemenang. Pemenang ditentukan lebih dulu oleh pickWinners
+   * (tanpa pengembalian, jadi tidak ada nama ganda), lalu roda berputar ke
+   * masing-masing. Susunan segmen TIDAK diubah di tengah sesi supaya penunjuk
+   * tidak melompat; nama yang sudah keluar baru dikeluarkan dari roda setelah
+   * hasilnya disimpan.
+   */
+  async function spin() {
     if (spinning || segments.length === 0) return;
-    const idx = pickWinner(segments);
-    const target = finalRotation(rotation.get(), landingAngle(segments[idx]), reduce ? 1 : 7);
+    const picks = pickWinners(segments, drawTarget);
+    if (picks.length === 0) return;
+    skipRef.current = false;
     setSpinning(true);
-    setWinner(null);
-    animate(rotation, target, {
-      duration: reduce ? 0.3 : 6,
-      ease: [0.12, 0.8, 0.12, 1],
-      onComplete: () => {
-        rotation.set(target % 360); // jaga angka rotasi tetap kecil antar putaran
-        setSpinning(false);
-        setWinner(segments[idx]);
-      },
-    });
+    setDrawn(null);
+    setPartial([]);
+    // Undian tunggal dapat putaran panjang yang dramatis. Untuk banyak pemenang
+    // tiap putaran dipercepat supaya 10 nama tidak memakan satu menit penuh.
+    const many = picks.length > 1;
+    const duration = !many ? 6 : picks.length <= 3 ? 3.2 : picks.length <= 5 ? 2.4 : 1.8;
+    const turns = !many ? 7 : 3;
+    const got: WheelEntry[] = [];
+    for (const idx of picks) {
+      const instant = reduce || skipRef.current;
+      await spinOnce(landingAngle(segments[idx]), instant ? 1 : turns, instant ? 0.25 : duration);
+      got.push(segments[idx]);
+      setPartial([...got]);
+      // Jeda singkat antar putaran supaya nama yang baru keluar sempat terbaca.
+      if (got.length < picks.length && !(reduce || skipRef.current)) {
+        await new Promise((r) => setTimeout(r, 700));
+      }
+    }
+    setSpinning(false);
+    setDrawn(got);
   }
 
-  function confirmWinner() {
-    if (!winner) return;
-    const entry: Winner = {
-      label: winner.label,
-      at: new Date().toISOString(),
-      source:
-        source === "manual"
-          ? "Input manual"
-          : selectedPost
-            ? `Komentar post ${fmtDate(selectedPost.posted_at)}`
-            : "Komentar",
-      href: winner.href,
-      detail: winner.detail,
-    };
-    const next = [entry, ...winners];
+  /** Hentikan animasi sisa undian; pemenangnya tetap yang sudah diundi di awal. */
+  function skipAnimation() {
+    skipRef.current = true;
+    animRef.current?.complete?.();
+  }
+
+  function confirmWinners() {
+    if (!drawn?.length) return;
+    const at = new Date().toISOString();
+    const src =
+      source === "manual"
+        ? "Input manual"
+        : selectedPost
+          ? `Komentar post ${fmtDate(selectedPost.posted_at)}`
+          : "Komentar";
+    const entries: Winner[] = drawn.map((w) => ({ label: w.label, at, source: src, href: w.href, detail: w.detail }));
+    // Riwayat tersusun terbaru di atas. Urutan undian dibalik saat ditempel
+    // supaya pemenang pertama tetap bernomor 1 di salinan teks dan CSV.
+    const next = [...entries.slice().reverse(), ...winners];
     setWinners(next);
     saveWinners(next);
-    if (removeWinner) setRemoved(new Set(removed).add(winner.label.toLowerCase()));
-    setWinner(null);
+    if (removeWinner) {
+      const nextRemoved = new Set(removed);
+      for (const w of drawn) nextRemoved.add(w.label.toLowerCase());
+      setRemoved(nextRemoved);
+    }
+    setDrawn(null);
+    setPartial([]);
   }
 
   function clearWinners() {
@@ -440,7 +496,73 @@ export function SpinWheelApp({
           </div>
         </div>
 
+        {/* Jumlah pemenang: pilihan cepat plus isian bebas. Label di atas kontrol (skill-ui-ux §4.6). */}
+        <div role="group" aria-labelledby="jumlah-pemenang" className="flex flex-col items-center gap-2">
+          <p id="jumlah-pemenang" className="text-caption font-medium text-ink-muted">
+            Jumlah pemenang per putaran
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {[1, 3, 5, 10].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setCountInput(String(n))}
+                disabled={spinning}
+                aria-pressed={drawCount === n}
+                className={cn(
+                  STAGE_BTN,
+                  "min-w-11 justify-center px-4 tabular-nums",
+                  drawCount === n && "bg-brand-orange font-bold text-[#172019] hover:bg-brand-orange"
+                )}
+              >
+                {n}
+              </button>
+            ))}
+            <label className="inline-flex h-9 items-center gap-2 rounded-full bg-white/10 px-3.5 text-caption font-medium">
+              Bebas
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={Math.max(active.length, 1)}
+                value={countInput}
+                onChange={(e) => setCountInput(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+                onBlur={() => setCountInput(String(drawCount))}
+                disabled={spinning}
+                aria-label="Jumlah pemenang, isi bebas"
+                className="h-7 w-16 rounded-full bg-white/15 px-2 text-center tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50"
+              />
+            </label>
+          </div>
+          {drawCount > active.length && active.length > 0 ? (
+            <p className="text-caption text-brand-orange">
+              Peserta di roda hanya {fmtInt(active.length)}, jadi yang diundi {fmtInt(drawTarget)}.
+            </p>
+          ) : null}
+        </div>
+
         <Wheel segments={segments} rotation={rotation} onSpin={spin} disabled={spinning || segments.length === 0} spinning={spinning} />
+
+        {/* Umpan balik saat mengundi banyak pemenang: sudah dapat berapa, siapa, dan jalan keluar. */}
+        {spinning && drawTarget > 1 ? (
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-caption text-ink-muted tabular-nums" role="status">
+              Pemenang {fmtInt(partial.length)} dari {fmtInt(drawTarget)}
+            </p>
+            {partial.length ? (
+              <ul className="flex flex-wrap justify-center gap-1.5">
+                {partial.map((w, i) => (
+                  <li key={`${w.label}-${i}`} className="rounded-full bg-white/10 px-3 py-1 text-caption break-all">
+                    {i + 1}. @{w.label}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <button type="button" onClick={skipAnimation} className={STAGE_BTN}>
+              Lewati animasi
+            </button>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button type="button" onClick={() => setShuffleNonce((n) => n + 1)} disabled={spinning || active.length < 2} className={STAGE_BTN}>
@@ -516,9 +638,9 @@ export function SpinWheelApp({
           transform, dan elemen fixed di dalam elemen ber-transform ikut terkurung. */}
       {mounted ? createPortal(
       <AnimatePresence>
-        {winner ? (
+        {drawn?.length ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="winner-title">
-            <motion.div className="absolute inset-0 bg-foreground/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setWinner(null)} />
+            <motion.div className="absolute inset-0 bg-foreground/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDrawn(null)} />
             <motion.div
               className="relative w-full max-w-md overflow-hidden rounded-card bg-card text-center shadow-2xl"
               initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.85, y: 20 }}
@@ -529,7 +651,7 @@ export function SpinWheelApp({
               <div className="ink-glow flex flex-col items-center gap-3 px-6 pt-8 pb-6 text-ink-foreground">
                 <button
                   type="button"
-                  onClick={() => setWinner(null)}
+                  onClick={() => setDrawn(null)}
                   aria-label="Tutup"
                   className="absolute top-4 right-4 inline-flex size-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
                 >
@@ -538,22 +660,55 @@ export function SpinWheelApp({
                 <span className="inline-flex size-16 items-center justify-center rounded-full bg-brand-orange shadow-lg">
                   <TrophyIcon className="size-8 text-[#172019]" weight="fill" aria-hidden />
                 </span>
-                <p className="text-body-sm text-ink-muted">Selamat kepada</p>
-                <h3 id="winner-title" className="text-h4 leading-tight font-bold tracking-tight break-all">
-                  @{winner.label}
-                </h3>
+                <p className="text-body-sm text-ink-muted">
+                  {drawn.length === 1 ? "Selamat kepada" : `Selamat kepada ${fmtInt(drawn.length)} pemenang`}
+                </p>
+                {drawn.length === 1 ? (
+                  <h3 id="winner-title" className="text-h4 leading-tight font-bold tracking-tight break-all">
+                    @{drawn[0].label}
+                  </h3>
+                ) : (
+                  <h3 id="winner-title" className="text-lead leading-tight font-bold tracking-tight">
+                    Hasil undian
+                  </h3>
+                )}
               </div>
               <div className="flex flex-col gap-5 p-6">
-                {winner.detail ? <p className="mx-auto max-w-[40ch] rounded-tile bg-muted/60 p-3 text-body-sm">“{winner.detail}”</p> : null}
+                {drawn.length === 1 ? (
+                  drawn[0].detail ? <p className="mx-auto max-w-[40ch] rounded-tile bg-muted/60 p-3 text-body-sm">“{drawn[0].detail}”</p> : null
+                ) : (
+                  <ol className="relative max-h-72 overflow-y-auto text-left">
+                    {drawn.map((w, i) => (
+                      <li key={`${w.label}-${i}`} className="flex items-center gap-3 rounded-tile px-2 py-2 odd:bg-muted/50">
+                        <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-orange-soft text-caption font-bold text-foreground tabular-nums">
+                          {i + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 text-body-sm font-semibold break-all">@{w.label}</span>
+                        {w.href ? (
+                          <a
+                            href={w.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Lihat profil ${w.label} (tab baru)`}
+                            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border hover:bg-accent"
+                          >
+                            <ArrowSquareOutIcon className="size-4" aria-hidden />
+                          </a>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ol>
+                )}
                 <div className="flex flex-wrap justify-center gap-2">
-                  {winner.href ? (
-                    <a href={winner.href} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-2 rounded-full border px-4 text-body-sm font-medium hover:bg-accent">
+                  {drawn.length === 1 && drawn[0].href ? (
+                    <a href={drawn[0].href} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-2 rounded-full border px-4 text-body-sm font-medium hover:bg-accent">
                       Lihat profil <ArrowSquareOutIcon className="size-4" aria-hidden />
                       <span className="sr-only">(tab baru)</span>
                     </a>
                   ) : null}
-                  <Button onClick={confirmWinner} autoFocus>
-                    <ConfettiIcon aria-hidden /> Simpan pemenang
+                  <Button onClick={confirmWinners} autoFocus>
+                    <ConfettiIcon aria-hidden />
+                    {drawn.length === 1 ? "Simpan pemenang" : `Simpan ${fmtInt(drawn.length)} pemenang`}
                   </Button>
                 </div>
               </div>
