@@ -53,6 +53,38 @@ export function pickWinner(entries: WheelEntry[], rng?: (buf: Uint32Array) => Ui
 }
 
 /**
+ * Beberapa pemenang sekaligus, diundi TANPA PENGEMBALIAN: satu peserta tidak
+ * bisa menang dua kali dalam satu sesi undian. Bobot peserta yang belum menang
+ * tetap berlaku di undian berikutnya, jadi hasilnya sama dengan memutar roda
+ * berulang kali lalu mengeluarkan pemenangnya.
+ *
+ * Mengembalikan indeks pemenang dalam urutan undian. Bila `count` lebih besar
+ * dari jumlah peserta, hasilnya sebanyak peserta yang ada (bukan galat):
+ * pemanggil menampilkan jumlah yang benar-benar didapat.
+ */
+export function pickWinners(entries: WheelEntry[], count: number, rng?: (buf: Uint32Array) => Uint32Array) {
+  const want = Math.min(Math.max(Math.trunc(count) || 0, 0), entries.length);
+  const pool = entries.map((e, i) => ({ index: i, weight: e.weight }));
+  const picked: number[] = [];
+  for (let k = 0; k < want; k++) {
+    const total = pool.reduce((s, p) => s + p.weight, 0);
+    if (total <= 0) break; // sisa peserta semuanya berbobot 0
+    let r = randomInt(total, rng);
+    let hit = pool.length - 1;
+    for (let j = 0; j < pool.length; j++) {
+      r -= pool[j].weight;
+      if (r < 0) {
+        hit = j;
+        break;
+      }
+    }
+    picked.push(pool[hit].index);
+    pool.splice(hit, 1);
+  }
+  return picked;
+}
+
+/**
  * Rotasi akhir (derajat, searah jarum jam) supaya penunjuk di atas berhenti
  * pada sudut `targetAngle` roda, setelah `spins` putaran penuh dari posisi sekarang.
  */
