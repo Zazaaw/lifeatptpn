@@ -153,6 +153,28 @@ select ig.trigger_sync('hourly');
 5. Cek hasil: `select details->'comments' from ig.sync_logs order by id desc limit 1;`
    `permissionSuspected` harus `false` dan `stored` > 0. Komentar diambil bertahap (maks 30 request per jam).
 
+### Kebijakan privasi dan permintaan hapus data
+
+Halaman `/privacy` adalah Privacy Policy URL untuk Meta (App Settings > Basic). Untuk kolom
+User data deletion, pakai `/privacy#hapus-data`. Isinya harus selalu cocok dengan cara kerja
+aplikasi: kalau ada data, cookie, atau penyimpanan baru, perbarui halaman itu juga.
+
+Halaman tersebut menjanjikan permintaan hapus data lewat **cultureptpn@gmail.com** ditindaklanjuti
+paling lambat **30 hari**. Cara menanganinya (SQL editor Supabase):
+
+```sql
+-- 1. Lihat dulu data yang akan dihapus
+select id, username, left(text, 80) as isi, commented_at
+from ig.comments where lower(username) = lower('<username_instagram>');
+
+-- 2. Hapus
+delete from ig.comments where lower(username) = lower('<username_instagram>');
+```
+
+Lalu balas email pemohon. Catatan: komentar yang masih ada di Instagram akan terambil lagi pada
+sinkronisasi berikutnya (belum ada daftar pengecualian), dan riwayat pemenang Spin Wheel tersimpan di
+browser masing-masing perangkat, bukan di database.
+
 ### Kalau token Instagram mati
 
 Token di-refresh otomatis tiap 7 hari. Bila tetap kedaluwarsa (mis. sync mati lebih dari 60 hari
