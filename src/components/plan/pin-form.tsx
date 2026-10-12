@@ -10,7 +10,7 @@ import { lockAction, unlockAction, type FormState } from "@/app/rencana/actions"
 const IDLE: FormState = { status: "idle" };
 
 /**
- * Kunci mode edit. Membaca kalender tidak perlu PIN; menambah, mengubah, dan
+ * Kunci mode edit. Membaca Content Plan tidak perlu PIN; menambah, mengubah, dan
  * menghapus perlu. PIN diperiksa di server dan tidak pernah dikirim balik ke
  * browser (lihat src/lib/plan-auth.ts).
  */
@@ -21,7 +21,7 @@ export function PinForm({ unlocked, configured }: { unlocked: boolean; configure
     return (
       <p className="flex items-center gap-2 text-caption text-muted-foreground">
         <LockKeyIcon className="size-4 shrink-0" aria-hidden />
-        Jadwal belum bisa diubah dari web: isi PLAN_EDIT_PIN di environment server.
+        Content Plan belum bisa diubah dari web: isi PLAN_EDIT_PIN di environment server.
       </p>
     );
   }
@@ -44,7 +44,7 @@ export function PinForm({ unlocked, configured }: { unlocked: boolean; configure
     <form action={action} className="flex flex-wrap items-end gap-2">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="pin" className="text-caption font-medium text-muted-foreground">
-          PIN untuk mengubah jadwal
+          PIN untuk mengubah Content Plan
         </label>
         <Input
           id="pin"
