@@ -1,7 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 
 import PillTabs from "@/components/ui/pill-tabs";
 
@@ -15,12 +16,13 @@ function useQueryUpdater() {
   const pathname = usePathname();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
-  const set = (key: string, value: string | null) => {
+  const set = (key: string, value: string | null, replace = false) => {
     const q = new URLSearchParams(params.toString());
     if (value) q.set(key, value);
     else q.delete(key);
     q.delete("page");
-    startTransition(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
+    const url = `${pathname}?${q.toString()}`;
+    startTransition(() => (replace ? router.replace(url, { scroll: false }) : router.push(url, { scroll: false })));
   };
   return { set, pending, params };
 }
@@ -85,6 +87,71 @@ export function QuerySelect({
         ))}
       </select>
     </div>
+  );
+}
+
+/**
+ * Kotak cari yang ditulis ke query string setelah user berhenti mengetik
+ * (350 ms). Memakai router.replace supaya tombol kembali tidak melewati satu
+ * per satu huruf. Pemanggil memberi `key={value}` agar isian ikut kosong saat
+ * filter di-reset dari luar.
+ */
+export function QuerySearch({
+  name,
+  value,
+  label,
+  placeholder,
+  id,
+}: {
+  name: string;
+  value: string;
+  label: string;
+  placeholder?: string;
+  id: string;
+}) {
+  const { set, pending } = useQueryUpdater();
+  const [text, setText] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const commit = (v: string) => {
+    clearTimeout(timer.current);
+    if (v.trim() !== value) set(name, v.trim() || null, true);
+  };
+
+  return (
+    <form
+      role="search"
+      className="no-print flex min-w-0 flex-col gap-1.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        commit(text);
+      }}
+    >
+      <label htmlFor={id} className="text-caption font-medium text-muted-foreground">
+        {label}
+      </label>
+      <span className="relative">
+        <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <input
+          id={id}
+          type="search"
+          value={text}
+          maxLength={80}
+          placeholder={placeholder}
+          onChange={(e) => {
+            const v = e.target.value;
+            setText(v);
+            clearTimeout(timer.current);
+            timer.current = setTimeout(() => commit(v), 350);
+          }}
+          className={
+            "h-10 w-full rounded-full border border-input bg-card pr-4 pl-10 text-body shadow-sm outline-hidden placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring md:text-body-sm" +
+            (pending ? " opacity-70" : "")
+          }
+        />
+      </span>
+    </form>
   );
 }
 

@@ -8,6 +8,8 @@ export type IntroStat = {
   icon: Icon;
   /** Teks lengkap untuk pembaca layar / tooltip (mis. angka tanpa singkatan). */
   title?: string;
+  /** Satu baris kecil di bawah label (mis. "50% dari total"). */
+  hint?: string;
 };
 
 /**
@@ -41,6 +43,7 @@ export function PageIntro({
   children?: React.ReactNode;
   className?: string;
 }) {
+  const wide = (stats?.length ?? 0) > 3;
   return (
     <section
       aria-label="Kepala halaman"
@@ -49,7 +52,14 @@ export function PageIntro({
         className
       )}
     >
-      <div className="grid grid-cols-1 gap-6 p-5 md:p-7 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-10">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-6 p-5 md:p-7",
+          // Lebih dari 3 tile tidak muat di samping judul (5 x 10,5rem di layar 1280px
+          // menghimpit judul jadi nol), jadi tile turun ke bawah judul selebar kartu.
+          !wide && "xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-10"
+        )}
+      >
         <div className="min-w-0">
           {eyebrow ? (
             <div className="mb-3 flex flex-wrap items-center gap-2 text-caption font-medium text-muted-foreground">{eyebrow}</div>
@@ -62,8 +72,13 @@ export function PageIntro({
         {stats?.length ? (
           <dl
             className={cn(
-              "grid gap-2 sm:gap-3 xl:grid-flow-col xl:grid-cols-none xl:auto-cols-[minmax(10.5rem,auto)] 2xl:auto-cols-[minmax(12.5rem,auto)]",
-              stats.length === 2 ? "grid-cols-2" : "grid-cols-3"
+              "grid gap-2 sm:gap-3",
+              wide
+                ? cn("grid-cols-2 sm:grid-cols-3", stats.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-5")
+                : cn(
+                    "xl:grid-flow-col xl:grid-cols-none xl:auto-cols-[minmax(10.5rem,auto)] 2xl:auto-cols-[minmax(12.5rem,auto)]",
+                    stats.length === 2 ? "grid-cols-2" : "grid-cols-3"
+                  )
             )}
           >
             {stats.map((s, i) => {
@@ -74,7 +89,9 @@ export function PageIntro({
                   title={s.title}
                   className={cn(
                     "flex min-w-0 flex-col-reverse justify-end gap-2 rounded-tile px-3 py-3 sm:gap-2.5 sm:p-4 2xl:p-5",
-                    lead ? "ink-glow text-ink-foreground shadow-ink" : "border border-border/70 bg-card/85"
+                    lead ? "ink-glow text-ink-foreground shadow-ink" : "border border-border/70 bg-card/85",
+                    // Mode lebar di ponsel: tile utama selebar baris, sisanya 2 x 2.
+                    wide && lead && "col-span-2 sm:col-span-1"
                   )}
                 >
                   <dt className={cn("flex items-center gap-1.5 text-caption font-medium", lead ? "text-ink-muted" : "text-muted-foreground")}>
@@ -87,7 +104,12 @@ export function PageIntro({
                     >
                       <s.icon className="size-3.5" weight="bold" aria-hidden />
                     </span>
-                    <span className="min-w-0 leading-tight">{s.label}</span>
+                    <span className="min-w-0 leading-tight">
+                      {s.label}
+                      {s.hint ? (
+                        <span className={cn("block font-normal", lead ? "text-ink-muted" : "text-muted-foreground")}>{s.hint}</span>
+                      ) : null}
+                    </span>
                   </dt>
                   <dd className="text-h5 leading-none font-bold tracking-tight whitespace-nowrap tabular-nums sm:text-h4 2xl:text-kpi">
                     {s.value}
