@@ -17,9 +17,9 @@ import { PeriodDetails } from "@/components/overview/period-details";
 import { UpcomingPlanCard } from "@/components/overview/upcoming-plan-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMeta, getOverview, getPostCalendar } from "@/lib/data";
-import { getPlanUpcoming } from "@/lib/plan";
+import { getContentPlanUpcoming } from "@/lib/content-plan-data";
 import { DataError } from "@/lib/supabase-server";
-import type { PlanUpcoming } from "@/lib/plan-types";
+import type { CpUpcoming } from "@/lib/content-plan";
 import { fmtCompact, fmtInt, fmtPct, fmtRange } from "@/lib/format";
 import { parseRange, rangeQuery } from "@/lib/range";
 
@@ -48,15 +48,15 @@ export default async function OverviewPage({
     getOverview(range.from, range.to),
     getMeta(),
     getPostCalendar(range.to),
-    // Menu Rencana bisa saja belum dimigrasikan di database: kartunya menjelaskan
+    // Content Plan bisa saja belum dimigrasikan di database: kartunya menjelaskan
     // sebabnya, sementara sisa halaman tetap tampil.
-    getPlanUpcoming(5)
-      .then((d) => ({ data: d as PlanUpcoming | null, error: undefined as string | undefined }))
+    getContentPlanUpcoming(5)
+      .then((d) => ({ data: d as CpUpcoming | null, error: undefined as string | undefined }))
       .catch((e) => ({
         data: null,
         error:
-          e instanceof DataError && /ig_plan_upcoming|schema cache|does not exist|PGRST202/i.test(e.detail ?? "")
-            ? "Menu Rencana belum aktif: jalankan migrasi supabase/migrations/20260918090000_ig_plan.sql di Supabase."
+          e instanceof DataError && /ig_cp_upcoming|schema cache|does not exist|PGRST202/i.test(e.detail ?? "")
+            ? "Content Plan belum aktif: jalankan migrasi supabase/migrations/20261012090000_ig_content_plan.sql di Supabase."
             : "Rencana terdekat gagal dimuat. Coba muat ulang halaman.",
       })),
   ]);
