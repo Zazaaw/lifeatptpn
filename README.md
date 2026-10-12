@@ -16,7 +16,7 @@ Data ditarik otomatis dari Instagram Graph API ke Supabase setiap jam. Dashboard
 | `/audiens` | Umur & gender, kota, negara, jam online |
 | `/konten/[id]#komentar` | Komentar per akun untuk satu post (cari, akun paling aktif, balasan) |
 | `/spin-wheel` | Spin Wheel kuis: peserta dari komentar post (filter kata kunci, batas waktu, kecualikan akun) atau input manual |
-| `/rencana` | Kalender rencana konten: klik tanggal untuk melihat rincian acara, tambah/ubah/hapus dengan PIN |
+| `/rencana` | Content Plan: rencana konten per pilar dan rubrik, progres produksi 4 tahap, status, PIC, tautan ke post yang terbit. Tambah/ubah/hapus dengan PIN |
 | `/laporan` | Laporan siap kirim + tombol Unduh Excel dan Cetak |
 | `/api/laporan/excel?from=YYYY-MM-DD&to=YYYY-MM-DD` | File .xlsx |
 
@@ -42,7 +42,7 @@ region fungsi `sin1` Singapura supaya dekat dengan Supabase `ap-southeast-1`).
    |---|---|
    | `SUPABASE_URL` | URL project Supabase (`https://<ref>.supabase.co`) |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (Supabase > Project Settings > API). **Rahasia**, jangan diberi prefix `NEXT_PUBLIC_` |
-   | `PLAN_EDIT_PIN` | PIN untuk mengubah jadwal di menu Rencana (minimal 4 karakter). Tanpa ini kalender tetap terbaca, tetapi tidak bisa diubah dari web |
+   | `PLAN_EDIT_PIN` | PIN untuk mengubah Content Plan (minimal 4 karakter). Tanpa ini Content Plan tetap terbaca, tetapi tidak bisa diubah dari web |
 
 3. Deploy. Setiap push ke branch utama men-deploy ulang otomatis.
 
@@ -74,25 +74,37 @@ level proxy (IP allowlist atau basic auth). Halaman sudah diberi `noindex`.
 
 `SUPABASE_SERVICE_ROLE_KEY` hanya dibaca di server (`src/lib/supabase-server.ts` bertanda `server-only`).
 
-## Menu Rencana (kalender konten)
+## Menu Content Plan (`/rencana`)
 
 Menu ini satu-satunya bagian yang **menulis** data dari web, jadi ada dua hal yang perlu disiapkan.
 
-1. Jalankan `supabase/migrations/20260918090000_ig_plan.sql` di SQL editor Supabase. Migrasi membuat
-   tabel `ig.plan_events`, function `public.ig_plan_*`, dan lima acara contoh berlabel "Contoh" di
-   minggu berjalan (bisa dihapus sekali klik dari halaman Rencana).
+1. Jalankan `supabase/migrations/20261012090000_ig_content_plan.sql` di SQL editor Supabase. Migrasi
+   membuat tabel `ig.content_plan` dan function `public.ig_cp_*`. Tidak ada data contoh.
 2. Isi `PLAN_EDIT_PIN` di environment (lokal dan Vercel).
 
-Cara kerjanya: membaca kalender bebas tanpa PIN; menambah, mengubah, dan menghapus perlu PIN yang
-dimasukkan sekali dan berlaku 12 jam di browser itu. Cookie hanya menyimpan sidik sha256 dari PIN,
-bertanda httpOnly, dan setiap server action memeriksa ulang sebelum menulis. PIN salah lima kali
-berturut-turut dari satu alamat IP ditahan 10 menit.
+Cara kerjanya: membaca bebas tanpa PIN; menambah, mengubah, dan menghapus perlu PIN yang dimasukkan
+sekali dan berlaku 12 jam di browser itu. Cookie hanya menyimpan sidik sha256 dari PIN, bertanda
+httpOnly, dan setiap server action memeriksa ulang sebelum menulis. PIN salah lima kali berturut-turut
+dari satu alamat IP ditahan 10 menit.
 
-Jenis acara: Shooting, Posting, Event, Deadline, Riset, Editing, Meeting, Libur. Tiap acara punya
-judul, jenis, status (rencana/selesai/batal), tanggal dan jam WIB, tanggal selesai opsional, lokasi,
-penanggung jawab, dan deskripsi sampai 2.000 karakter. Kalender juga menandai postingan yang
-benar-benar terbit pada tanggal itu, sehingga rencana dan realisasi terbaca berdampingan. Lima acara
-terdekat muncul di halaman Ringkasan.
+Isi halaman:
+
+- **KPI periode**: Total, Published, On Progress (Rencana, Produksi, Editing), Review, dan Overdue
+  (lewat tanggal tayang tetapi belum Published). Kelimanya partisi: jumlahnya sama dengan total.
+- **Tampilan**: Mingguan (Senin sampai Minggu), Bulanan, atau Daftar (semua tanggal, terbaru di atas).
+- **8 pilar** (Business Savvy, Operational Excellence, Risk Culture, Digital Culture, Innovation Culture,
+  ESG, Humanizing Human, RWP) dan **8 rubrik**. Tiap kartu sekaligus filter. Angka rubrik
+  menampilkan jumlah rencana dan jumlah post Instagram di periode itu yang captionnya memuat hashtag
+  rubrik (`#tumbuhdiptpn` dan seterusnya).
+- **Tabel**: tanggal tayang, judul, pilar, rubrik, format, progres produksi (Script, Editing, Review,
+  Upload; klik untuk mengubah saat mode edit), status, PIC. Konten bisa ditautkan ke post Instagram
+  yang benar-benar terbit (dicari otomatis 7 hari di sekitar tanggal tayang); fotonya diambil dari
+  cermin Storage `ig-thumbs`, dan rubrik disarankan dari hashtag caption.
+- Konten yang belum Published muncul di kartu "Rencana terdekat" di halaman Ringkasan.
+
+Daftar pilar, rubrik, format, status, dan tahap dikunci di dua tempat yang harus diubah bersamaan:
+`src/lib/content-plan.ts` dan constraint tabel di migrasi di atas. Tabel lama `ig.plan_events`
+(kalender acara 18 Sep 2026) tidak dihapus, tetapi tidak dipakai halaman lagi.
 
 ## Sinkronisasi data (Supabase)
 
