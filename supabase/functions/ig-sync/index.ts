@@ -26,6 +26,8 @@ const COMMENT_RECHECK_HOURS = 24; // post < 7 hari dicek ulang walau jumlah kome
 const IMAGE_BUCKET = "ig-thumbs";
 const IMAGE_BUDGET = 25;      // unduh+unggah maks per run; 250 post terisi dalam ~10 jam
 const IMAGE_RETRY_HOURS = 6;  // post yang gagal dicermin dicoba lagi paling cepat 6 jam
+const SLIDE_POST_BUDGET = 6;  // carousel yang slidenya dicermin per run (1 request API per post)
+const SIZE_BUDGET = 60;       // gambar lama yang ukurannya dibaca per run (dari Storage sendiri, tanpa API)
 
 const MEDIA_METRICS = [
   "views", "reach", "likes", "comments", "saved", "shares", "total_interactions",
@@ -317,6 +319,92 @@ async function syncMedia(api: Api, accountId: string, now: Date) {
 }
 
 /**
+ * Lebar & tinggi gambar dari header berkasnya (JPEG/PNG/WebP), tanpa pustaka.
+ * Dipakai galeri AGHRIS supaya foto tampil utuh sesuai rasio aslinya.
+ */
+function imageSize(b: Uint8Array): { w: number; h: number } | null {
+  if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    return { w: dv.getUint32(16), h: dv.getUint32(20) };
+  }
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const m = b[i + 1];
+      if (m === 0xff) { i++; continue; }
+      if (m === 0x01 || (m >= 0xd0 && m <= 0xd8)) { i += 2; continue; }
+      const len = (b[i + 2] << 8) | b[i + 3];
+      // SOF0..SOF15 kecuali DHT (c4), JPG (c8), DAC (cc).
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+        return { h: (b[i + 5] << 8) | b[i + 6], w: (b[i + 7] << 8) | b[i + 8] };
+      }
+      i += 2 + len;
+    }
+    return null;
+  }
+  const tag = (o: number) => String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
+  if (b.length > 30 && tag(0) === "RIFF" && tag(8) === "WEBP") {
+    const f = tag(12);
+    if (f === "VP8X") return { w: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), h: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)) };
+    if (f === "VP8 ") return { w: (b[26] | (b[27] << 8)) & 0x3fff, h: (b[28] | (b[29] << 8)) & 0x3fff };
+    if (f === "VP8L") {
+      const bits = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
+      return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 };
+    }
+  }
+  return null;
+}
+
+function storageEnv() {
+  const base = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!base || !key) throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY tidak tersedia");
+  return { base, key };
+}
+
+/**
+ * Unduh satu gambar dari CDN Meta lalu simpan ke bucket ig-thumbs dengan nama `name` (tanpa ekstensi).
+ * Mengembalikan URL publik permanen + ukuran gambar.
+ */
+async function mirrorImage(src: string, name: string) {
+  const { base, key } = storageEnv();
+  const res = await fetch(src, {
+    signal: AbortSignal.timeout(20_000),
+    headers: { "user-agent": "lifeatptpn-insight/1.0" },
+  });
+  // 403 "URL signature expired" = URL CDN sudah mati sebelum tercermin.
+  // Gambarnya tidak bisa diselamatkan lagi sampai sync mengambil URL baru.
+  if (!res.ok) throw new Error(`CDN ${res.status}`);
+  const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+  if (!type.startsWith("image/")) throw new Error(`bukan gambar: ${type || "tanpa content-type"}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength === 0) throw new Error("file kosong");
+
+  const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+  const path = `${name}.${ext}`;
+  const target = `${base}/storage/v1/object/${IMAGE_BUCKET}/${path}`;
+  // Project ini punya kunci API format baru (sb_secret_...). Storage mengurai
+  // header Authorization sebagai JWT, jadi kunci format baru harus lewat
+  // header `apikey`; kunci legacy (JWT) menerima keduanya. Kalau tetap
+  // ditolak, ulangi tanpa Authorization supaya gateway yang menyuntikkan JWT.
+  const common: Record<string, string> = {
+    apikey: key,
+    "content-type": type,
+    "cache-control": "max-age=31536000, immutable", // isi file tidak pernah berubah
+    "x-upsert": "true",
+  };
+  const put = (headers: Record<string, string>) =>
+    fetch(target, { method: "POST", headers, body: bytes, signal: AbortSignal.timeout(30_000) });
+  let upload = await put({ ...common, authorization: `Bearer ${key}` });
+  if (!upload.ok && [400, 401, 403].includes(upload.status)) upload = await put(common);
+  if (!upload.ok) throw new Error(`Storage ${upload.status}: ${(await upload.text()).slice(0, 120)}`);
+
+  const size = imageSize(bytes);
+  return { url: `${base}/storage/v1/object/public/${IMAGE_BUCKET}/${path}`, w: size?.w ?? 0, h: size?.h ?? 0 };
+}
+
+/**
  * Cermin thumbnail post ke Supabase Storage (bucket `ig-thumbs`).
  *
  * URL CDN Meta bertanda tangan dan mati dalam hitungan hari. Selama ini
@@ -334,9 +422,7 @@ async function syncMedia(api: Api, accountId: string, now: Date) {
  * 250 post terisi penuh dalam ~10 jam, post baru tercermin di jam yang sama.
  */
 async function syncImages(now: Date) {
-  const base = Deno.env.get("SUPABASE_URL");
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!base || !key) throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY tidak tersedia");
+  storageEnv();
 
   const candidates = await sql`
     select id, coalesce(thumbnail_url, media_url) as src
@@ -353,40 +439,10 @@ async function syncImages(now: Date) {
   for (const row of candidates) {
     const id = row.id as string;
     try {
-      const res = await fetch(row.src as string, {
-        signal: AbortSignal.timeout(20_000),
-        headers: { "user-agent": "lifeatptpn-insight/1.0" },
-      });
-      // 403 "URL signature expired" = URL CDN sudah mati sebelum tercermin.
-      // Gambarnya tidak bisa diselamatkan lagi sampai sync mengambil URL baru.
-      if (!res.ok) throw new Error(`CDN ${res.status}`);
-      const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
-      if (!type.startsWith("image/")) throw new Error(`bukan gambar: ${type || "tanpa content-type"}`);
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.byteLength === 0) throw new Error("file kosong");
-
-      const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
-      const path = `${id}.${ext}`;
-      const target = `${base}/storage/v1/object/${IMAGE_BUCKET}/${path}`;
-      // Project ini punya kunci API format baru (sb_secret_...). Storage mengurai
-      // header Authorization sebagai JWT, jadi kunci format baru harus lewat
-      // header `apikey`; kunci legacy (JWT) menerima keduanya. Kalau tetap
-      // ditolak, ulangi tanpa Authorization supaya gateway yang menyuntikkan JWT.
-      const common: Record<string, string> = {
-        apikey: key,
-        "content-type": type,
-        "cache-control": "max-age=31536000, immutable", // isi file tidak pernah berubah
-        "x-upsert": "true",
-      };
-      const put = (headers: Record<string, string>) =>
-        fetch(target, { method: "POST", headers, body: bytes, signal: AbortSignal.timeout(30_000) });
-      let upload = await put({ ...common, authorization: `Bearer ${key}` });
-      if (!upload.ok && [400, 401, 403].includes(upload.status)) upload = await put(common);
-      if (!upload.ok) throw new Error(`Storage ${upload.status}: ${(await upload.text()).slice(0, 120)}`);
-
+      const img = await mirrorImage(row.src as string, id);
       await sql`
         update ig.media set
-          image_url = ${`${base}/storage/v1/object/public/${IMAGE_BUCKET}/${path}`},
+          image_url = ${img.url}, image_w = ${img.w}, image_h = ${img.h},
           image_synced_at = ${now}, image_attempted_at = ${now}, image_error = null, updated_at = now()
         where id = ${id}`;
       saved++;
@@ -412,6 +468,90 @@ async function syncImages(now: Date) {
     pending: counts.belum,
     errors: Object.keys(errors).length ? errors : undefined,
   };
+}
+
+/**
+ * Cermin SEMUA slide carousel (11 Nov 2026, untuk galeri Life at PTPN di AGHRIS).
+ *
+ * ig.media hanya menyimpan sampul carousel. Untuk tiap carousel yang belum
+ * punya `slides`, ambil /{id}/children (URL CDN segar, 1 request) lalu simpan
+ * tiap slide ke ig-thumbs sebagai <id>_01, <id>_02, … Slide video memakai
+ * thumbnail-nya. Dibatasi SLIDE_POST_BUDGET post per run; slide satu post
+ * diunduh paralel supaya run tetap singkat.
+ */
+async function syncSlides(api: Api, now: Date) {
+  const candidates = await sql`
+    select id from ig.media
+    where media_type = 'CAROUSEL_ALBUM' and slides is null
+      and (slides_attempted_at is null or slides_attempted_at < ${now}::timestamptz - make_interval(hours => ${IMAGE_RETRY_HOURS}::int))
+    order by posted_at desc
+    limit ${SLIDE_POST_BUDGET}`;
+
+  let saved = 0;
+  let images = 0;
+  const errors: Record<string, string> = {};
+  for (const row of candidates) {
+    const id = row.id as string;
+    try {
+      const body = await api.get(`/${id}/children`, { fields: "id,media_type,media_url,thumbnail_url" });
+      const kids = ((body.data ?? []) as Json[])
+        .map((k) => (k.media_type === "VIDEO" ? k.thumbnail_url : k.media_url) ?? k.thumbnail_url ?? k.media_url)
+        .filter((u): u is string => typeof u === "string" && u.length > 0);
+      if (!kids.length) throw new Error("children kosong");
+      const slides = await Promise.all(kids.map((src, i) => mirrorImage(src, `${id}_${String(i + 1).padStart(2, "0")}`)));
+      await sql`
+        update ig.media set slides = ${sql.json(slides as never)}, slides_synced_at = ${now},
+          slides_attempted_at = ${now}, slides_error = null, updated_at = now()
+        where id = ${id}`;
+      saved++;
+      images += slides.length;
+    } catch (e) {
+      errors[id] = errMsg(e);
+      await sql`update ig.media set slides_attempted_at = ${now}, slides_error = ${errMsg(e)} where id = ${id}`;
+    }
+  }
+
+  const [counts] = await sql`
+    select count(*) filter (where slides is not null)::int as tersimpan,
+           count(*) filter (where slides is null)::int as belum
+    from ig.media where media_type = 'CAROUSEL_ALBUM'`;
+  return {
+    candidates: candidates.length,
+    saved,
+    images,
+    stored: counts.tersimpan,
+    pending: counts.belum,
+    errors: Object.keys(errors).length ? errors : undefined,
+  };
+}
+
+/**
+ * Isi image_w/image_h untuk sampul yang tercermin sebelum kolom itu ada.
+ * Membaca dari bucket sendiri (bukan CDN Meta), jadi tidak butuh API Instagram.
+ * Ukuran tak terbaca dicatat 0 supaya tidak dicoba ulang tiap jam.
+ */
+async function syncImageSizes() {
+  const rows = await sql`
+    select id, image_url from ig.media
+    where image_url is not null and image_w is null
+    order by posted_at desc
+    limit ${SIZE_BUDGET}`;
+  let filled = 0;
+  for (let i = 0; i < rows.length; i += 10) {
+    await Promise.all(rows.slice(i, i + 10).map(async (r) => {
+      let size: { w: number; h: number } | null = null;
+      try {
+        const res = await fetch(r.image_url as string, { signal: AbortSignal.timeout(15_000) });
+        if (res.ok) size = imageSize(new Uint8Array(await res.arrayBuffer()));
+      } catch {
+        return; // jaringan: coba lagi run berikutnya
+      }
+      await sql`update ig.media set image_w = ${size?.w ?? 0}, image_h = ${size?.h ?? 0} where id = ${r.id as string}`;
+      if (size) filled++;
+    }));
+  }
+  const [{ belum }] = await sql`select count(*)::int as belum from ig.media where image_url is not null and image_w is null`;
+  return { checked: rows.length, filled, pending: belum };
 }
 
 /**
@@ -810,6 +950,7 @@ Deno.serve(async (req) => {
     if (mode === "hourly") {
       await step("media", () => syncMedia(api, id, now));
       await step("comments", () => syncComments(api, now));
+      await step("slides", () => syncSlides(api, now));
       await step("account_daily", () => syncAccountDaily(api, id, now));
       await step("followers_total", () => syncFollowerSnapshot(id, followersCount, now));
     } else {
@@ -824,6 +965,7 @@ Deno.serve(async (req) => {
   // saat API memblokir akses inilah kesempatan terakhir menyimpan gambar,
   // selama URL CDN yang sudah tersimpan belum kedaluwarsa.
   await step("images", () => syncImages(now));
+  await step("image_sizes", () => syncImageSizes());
 
   const status = !accountId ? "error" : failures.length ? "partial" : "success";
   details.usage = api.lastUsage;
