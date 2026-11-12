@@ -89,25 +89,30 @@ export default function BlurFade({
   };
   const combinedVariants = variant || defaultVariants;
 
-  if (reduceMotion) {
-    return <div className={className}>{children}</div>;
-  }
-
+  // Reduced motion: elemen tetap motion.div yang sama, hanya tanpa durasi.
+  // Dulu cabang ini me-render <div> polos. Server tidak tahu preferensi user,
+  // jadi HTML server membawa style opacity:0 dari state "hidden", lalu React
+  // tidak menambal atribut yang beda saat hydration: halaman tetap kosong untuk
+  // user yang mematikan animasi (ditemukan 12 Nov 2026, semua halaman kena).
   return (
     <AnimatePresence>
       <motion.div
         ref={ref}
         initial="hidden"
-        animate={isInView ? "visible" : "hidden"}
+        animate={isInView || reduceMotion ? "visible" : "hidden"}
         exit="hidden"
         variants={combinedVariants}
-        transition={{
-          // The tiny 0.04 base delay lets the browser paint one frame first,
-          // which prevents a flash of un-animated content on fast loads.
-          delay: 0.04 + delay,
-          duration,
-          ease: "easeOut",
-        }}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : {
+                // The tiny 0.04 base delay lets the browser paint one frame first,
+                // which prevents a flash of un-animated content on fast loads.
+                delay: 0.04 + delay,
+                duration,
+                ease: "easeOut",
+              }
+        }
         className={className}
       >
         {children}
