@@ -3,6 +3,7 @@ export const NAV_ITEMS = [
   { href: "/", label: "Ringkasan", icon: "overview" },
   { href: "/konten", label: "Konten", icon: "content" },
   { href: "/rencana", label: "Content Plan", icon: "plan" },
+  { href: "/being-the-best", label: "Being the Best", icon: "timeline" },
   { href: "/waktu-posting", label: "Waktu Posting", icon: "time" },
   { href: "/audiens", label: "Audiens", icon: "audience" },
   { href: "/spin-wheel", label: "Spin Wheel Kuis", icon: "wheel" },

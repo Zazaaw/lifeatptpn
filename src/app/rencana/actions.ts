@@ -93,12 +93,14 @@ export async function unlockAction(_prev: FormState, form: FormData): Promise<Fo
   const result = await unlockWithPin(pin);
   if (!result.ok) return fail(result.message);
   refresh();
+  revalidatePath("/being-the-best"); // PIN dan cookie yang sama membuka edit di halaman itu juga
   return { status: "ok", message: "Mode edit aktif. Kunci otomatis tertutup 12 jam lagi." };
 }
 
 export async function lockAction(): Promise<void> {
   await lockEditing();
   refresh();
+  revalidatePath("/being-the-best");
 }
 
 export async function saveContentAction(_prev: FormState, form: FormData): Promise<FormState> {
