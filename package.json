@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings tests/wheel.test.mts"
+    "test": "node --no-warnings tests/wheel.test.mts && node --no-warnings tests/being-the-best.test.mts",
+    "import:btb": "node scripts/import-being-the-best.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
