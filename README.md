@@ -17,6 +17,7 @@ Data ditarik otomatis dari Instagram Graph API ke Supabase setiap jam. Dashboard
 | `/konten/[id]#komentar` | Komentar per akun untuk satu post (cari, akun paling aktif, balasan) |
 | `/spin-wheel` | Spin Wheel kuis: peserta dari komentar post (filter kata kunci, batas waktu, kecualikan akun) atau input manual |
 | `/rencana` | Content Plan: rencana konten per pilar dan rubrik, progres produksi 4 tahap, status, PIC, tautan ke post yang terbit. Tambah/ubah/hapus dengan PIN |
+| `/being-the-best` | Timeline program budaya Being the Best (Above & Below the Line): due per program, Gantt per minggu, catatan penyusun. Tambah/ubah/hapus dengan PIN yang sama dengan Content Plan |
 | `/laporan` | Laporan siap kirim + tombol Unduh Excel dan Cetak |
 | `/api/laporan/excel?from=YYYY-MM-DD&to=YYYY-MM-DD` | File .xlsx |
 
@@ -105,6 +106,28 @@ Isi halaman:
 Daftar pilar, rubrik, format, status, dan tahap dikunci di dua tempat yang harus diubah bersamaan:
 `src/lib/content-plan.ts` dan constraint tabel di migrasi di atas. Tabel lama `ig.plan_events`
 (kalender acara 18 Sep 2026) tidak dihapus, tetapi tidak dipakai halaman lagi.
+
+## Menu Being the Best (`/being-the-best`)
+
+Timeline program budaya (Above & Below the Line). Data di tabel `ig.btb_programs`, `ig.btb_items`, `ig.btb_notes`,
+dibaca/ditulis lewat `public.ig_btb_*` (service_role saja). Membaca bebas; tambah/ubah/hapus program dan aktivitas
+perlu **PIN yang sama dengan Content Plan** (`PLAN_EDIT_PIN`). Buka kunci di salah satu halaman berlaku di keduanya.
+
+Pemasangan (sekali): jalankan di SQL editor Supabase, berurutan:
+
+1. `supabase/migrations/20261112100000_ig_being_the_best.sql` (tabel + function)
+2. `supabase/migrations/20261112100100_ig_being_the_best_seed.sql` (isi awal dari `data/timeline-being-the-best.xlsx`)
+
+Selama belum dijalankan, halaman menampilkan petunjuk ini (bukan galat).
+
+Seed di-generate dari xlsx dengan `npm run import:btb`, dan `npm test` gagal bila seed tidak lagi sama dengan xlsx.
+Seed memakai `on conflict do nothing`: menjalankannya lagi hanya menambah kode yang belum ada, tidak menimpa
+perubahan dari web. Untuk mengganti total dengan file baru, hapus dulu isi `ig.btb_items` dan `ig.btb_programs`.
+
+Aturan yang dipakai halaman: label minggu W1 = minggu yang Senin-nya paling awal di bulan itu (sama dengan file),
+due disimpan sebagai Senin minggunya, durasi = NETWORKDAYS Senin s.d. Jumat tanpa libur, urutan baris mengikuti kode
+(A1 < A2 < A10, A3.1 < A3.1.2). "Jadwal sudah mulai" dan "Lewat jadwal" dihitung dari hari ini (WIB); status Done
+menghapus tanda lewat jadwal.
 
 ## Sinkronisasi data (Supabase)
 
