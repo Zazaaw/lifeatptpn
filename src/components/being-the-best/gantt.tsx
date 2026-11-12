@@ -75,15 +75,20 @@ function Lane({ ctx, due, dueStrong, children }: { ctx: Ctx; due?: string | null
   );
 }
 
-/** Batang: tepi 4px membulat, cincin 2px warna kartu supaya terpisah dari garis hari ini. */
+/**
+ * Batang aktivitas memenuhi tinggi baris (sisa 10px atas-bawah) supaya terlihat
+ * jelas di baris yang tinggi (permintaan user 12 Nov 2026: "digedein, ngefull").
+ * Cincin 2px warna kartu memisahkannya dari garis hari ini. Batang program tetap
+ * tipis karena hanya ringkasan rentang.
+ */
 function Bar({ ctx, from, to, fill, thin, label }: { ctx: Ctx; from: string; to: string; fill: string; thin?: boolean; label: string }) {
   return (
     <span
       title={label}
       className={cn(
-        "absolute top-1/2 z-[2] -translate-y-1/2 rounded-[4px]",
+        "absolute z-[2]",
         fill,
-        thin ? "h-1.5 opacity-55" : "h-3.5 min-w-1.5 ring-2 ring-card"
+        thin ? "top-1/2 h-2.5 -translate-y-1/2 rounded-[4px] opacity-55" : "inset-y-2.5 min-w-2.5 rounded-[6px] ring-2 ring-card"
       )}
       style={{ left: `${ctx.axis.at(from)}%`, width: `${ctx.axis.span(from, to)}%` }}
     />
